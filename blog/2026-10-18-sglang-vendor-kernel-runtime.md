@@ -34,12 +34,6 @@ At low concurrency, SGLang's standard path runs each decoder layer as dozens of 
 
 The supported configuration uses decode graphs. Kernels compile and buffers are allocated at model initialization, and the graph records the selected path for each covered shape. Steps wider than 48 rows (more than eight requests at block size 5), prefill and unsupported configurations use SGLang's original forward.
 
-**AgentX results.** The comparison runs DeepSeek-V4.1-Flash on four MI355X GPUs with TP4 and DSpark block size 5. It uses the in-tree prototype of these kernels and compares it with SGLang's AgentX baseline on the same recipe. With the plugin, P90 interactivity improves by 50%, 56% and 45% at one, four and eight concurrent AgentX sessions, and total throughput per GPU improves by 23% at one session.
-
-![Reported AgentX P90 interactivity for DeepSeek-V4.1-Flash with DSpark on four MI355X GPUs, comparing SGLang with and without the AMD plugin](/images/blog/sglang-vendor-kernel-runtime/amd-agentx-interactivity.svg)
-
-*DeepSeek-V4.1-Flash · 4 × MI355X · TP4 · DSpark block size 5 · AgentX trace replay. "Plugin off" is SGLang's AgentX baseline; "plugin on" adds `--monokernel-backend amd`. Speculative acceptance is fixed at 3.51 tokens per verify step in both arms. P90 interactivity is the inverse of the 90th-percentile inter-token latency.*
-
 Accuracy is reported separately. The report gives GSM8K scores of 0.911 without the plugin and 0.901 with it (1,319 questions, TP4), and 60 of 60 on needle-in-a-haystack retrieval at 32K, 64K and 120K tokens. These are the observed results; the one-point GSM8K difference does not establish an accuracy change or numerical equivalence.
 
 ### NVIDIA Low-Latency Kernels
