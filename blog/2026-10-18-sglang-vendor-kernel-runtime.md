@@ -96,9 +96,7 @@ The plugin keeps two kernels but moves the send into the GEMM’s epilogue. Each
 
 *The plugin moves the cross-GPU send into the GEMM epilogue. Both paths use two kernels; box sizes do not represent durations.*
 
-**3. Start the expert GEMMs before routing finishes.** At low concurrency, routing can become a substantial part of the MoE path. For steps with at most eight rows, every expert’s selected tokens fit into a single eight-row tile. The plugin uses a presence bitmap and population counts to place these tiles without scanning or sorting. It preserves SGLang’s top-k selections and releases the first expert GEMM immediately so barrier and tensor-memory setup can overlap routing.
-
-The expert GEMM also skips an all-zero tile introduced by padding the weight layout. The benefit comes from simpler routing, earlier execution and less unnecessary work; the standard kernels already use eight-row tiles too. In the profiled runs, the median MoE window falls from 44.4 µs to 36.5 µs while the second GEMM and reduction take about as long as before.
+**3. Start the expert GEMMs before routing finishes.** At low concurrency, routing can take a substantial share of the MoE path. With at most eight rows, each expert’s selected tokens fit in one eight-row tile. The plugin uses a bitmap and population counts to place these tiles without scanning or sorting while preserving SGLang’s top-k selections. It launches the first expert GEMM early to overlap setup with routing and skips an all-zero tile in the padded weights. The standard kernels already use eight-row tiles; the gains come from simpler routing, earlier execution and less wasted work. In the profiled runs, the median MoE window falls from 44.4 µs to 36.5 µs with little change in the second GEMM or reduction.
 
 ![Measured MoE timeline at one request with and without the NVIDIA plugin](/images/blog/sglang-vendor-kernel-runtime/nvidia-moe-timeline.svg)
 
