@@ -51,21 +51,29 @@ On NVIDIA GPUs, we reduce latency by overlapping dependent kernels and communica
 
 <p style="font-size: 1.375rem; font-weight: 700; color: #111; margin-top: 1.5rem;">Low-Latency-Specific Optimizations</p>
 
-**1. Overlap dependent kernels.** Programmatic dependent launch (PDL) lets a kernel begin setup and weight loading before its predecessor finishes. SGLang already uses PDL; the plugin releases dependencies earlier so more preparation overlaps with ongoing computation. Small-batch projection kernels and RoPE fused into query loading further shorten the attention path. At one request, independent Engram lookups and projections also run ahead on a side stream.
+**1. Overlap dependent kernels.** Programmatic dependent launch (PDL) lets a kernel start while its predecessor is still running. It can prepare barriers, set up tensor memory and load weights before waiting for the input it needs. SGLang already uses PDL. The plugin moves dependency releases earlier so more of this preparation overlaps with ongoing computation. For example, the MoE reduction releases the next layer’s first projection as soon as it starts polling for peer results.
 
-**2. Overlap computation and communication.** The plugin moves the cross-GPU send into the output GEMM’s epilogue. Each completed tile goes directly to peer GPUs while other tiles are still being computed. A second kernel reduces the results and applies the mHC update and normalization. Both paths still use two kernels, but the plugin starts communication earlier and avoids rereading the partial output just to send it.
+The attention path also uses projection GEMMs specialized for small batches and applies RoPE while loading the query to remove a separate kernel. Where dependencies allow it, attention begins gathering KV data before waiting for the query. At one request, the plugin also moves independent Engram lookups and projections onto a side stream at the start of the step. Their all-reduces stay on the main stream to preserve communication order across GPUs.
+
+**2. Overlap computation and communication.** After the attention output projection, each GPU holds a partial result that must be reduced across GPUs. SGLang’s standard path uses two kernels: the GEMM writes its output, then a fused kernel reads it back, sends it to peers and performs the reduction, mHC update and normalization.
+
+The plugin keeps two kernels but moves the send into the GEMM’s epilogue. Each CTA publishes its completed tile directly from registers to peer GPUs through NVLink multicast stores while other tiles are still being computed. The consumer starts through PDL and waits for the published results before reducing them. This starts communication earlier and avoids rereading the partial output just to send it. The consumer’s computation remains unchanged.
 
 ![Attention output handoff in SGLang and the NVIDIA plugin for DeepSeek-V4.1-Flash on GB300](/images/blog/sglang-vendor-kernel-runtime/nvidia-output-handoff.svg)
 
 *The plugin moves the cross-GPU send into the GEMM epilogue. Both paths use two kernels; box sizes do not represent durations.*
 
-**3. Start expert GEMMs earlier.** For small batches, the plugin simplifies routing with a bitmap-based layout that avoids scanning and sorting. It also launches the first expert GEMM before routing finishes so setup overlaps with routing. The GEMM skips padded weight tiles that contain only zeros. Together these changes shorten the MoE path without changing the router’s selections.
+**3. Start expert GEMMs earlier.** At low concurrency, routing can become a substantial part of the MoE path. For steps with at most eight rows, every expert’s selected tokens fit into a single eight-row tile. The plugin uses a presence bitmap and population counts to place these tiles without scanning or sorting. It preserves SGLang’s top-k selections and releases the first expert GEMM immediately so barrier and tensor-memory setup can overlap routing.
+
+The expert GEMM also skips an all-zero tile introduced by padding the weight layout. The benefit comes from simpler routing, earlier execution and less unnecessary work; the standard kernels already use eight-row tiles too. In the profiled runs, the median MoE window falls from 44.4 µs to 36.5 µs while the second GEMM and reduction take about as long as before.
 
 ![Measured MoE timeline at one request with and without the NVIDIA plugin](/images/blog/sglang-vendor-kernel-runtime/nvidia-moe-timeline.svg)
 
-*One matched MoE trace pair. GEMM1 starts earlier and overlaps routing; its bar includes time spent waiting for routing to finish.*
+*One matched trace pair from the same GPU, layer and replay. GEMM1’s bar includes its wait for routing, so an earlier start can produce a longer bar while shortening the overall MoE window.*
 
-**4. Fuse sequential draft sampling.** DSpark proposes draft tokens sequentially, with each proposal depending on the previous token. The plugin handles all five proposals in one cooperative kernel launch per GPU instead of a chain of sampling kernels. It keeps the head weights in registers and coordinates token selection across GPUs within the kernel. SGLang’s speculative worker and acceptance logic remain unchanged.
+**4. Fuse sequential draft sampling.** DSpark’s Markov head proposes draft tokens one at a time, with each proposal depending on the previous token. The standard path runs a chain of embedding, projection, argmax and cross-GPU exchange kernels for every position. The plugin handles all five proposals in one cooperative launch per GPU and keeps each warp’s portion of the head weights in registers throughout the launch.
+
+GPUs exchange candidate tokens through a shared mailbox that coordinates both the cross-GPU argmax and synchronization between proposals. Each wait has a deadline so a stalled peer causes a fault rather than an indefinite hang. In the profiled runs, the proposal span drops from 85.1 µs to 34.2 µs. SGLang’s speculative worker and acceptance logic remain unchanged.
 
 **Serving results.** Both arms ran on the same four-GPU GB300 node with the same software, effective server arguments and environment. The only difference was `--enable-nvidia-megakernel`. We started four fresh servers in off/on/on/off order, and each one measured concurrency 1, 2, 4 and 8 forward and then in reverse. Inputs were 8,192 tokens and outputs 1,024 tokens, with identical prompts in both arms. At concurrency one, each pass warmed up for at least 60 seconds and then timed 30 requests; higher concurrency used 2C warmup and 5C timed requests. We kept all 800 timed requests.
 
