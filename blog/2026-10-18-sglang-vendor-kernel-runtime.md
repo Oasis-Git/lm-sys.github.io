@@ -36,7 +36,7 @@ The AMD implementation is compatible with decode graphs and integrates directly 
 
 ### NVIDIA Low-Latency Kernels
 
-[`sgl-nvidia-mega`](https://github.com/sgl-project/sgl-nvidia-mega) is the NVIDIA plugin, turned on with `--enable-nvidia-megakernel`. For now it targets one configuration: **DeepSeek-V4.1-Flash with DSpark speculative decoding on four GB300 GPUs (TP4)**. The plugin works on the weights, KV cache and scheduler that SGLang already owns and takes over the covered target-verify and draft steps. Prefill and anything outside its coverage run SGLang's normal forward. On our node it lifts per-user decode speed from 745.6 to 1,030.2 tokens/s at one request (+38%). At eight concurrent requests the gain is 12%.
+On NVIDIA GPUs, we reduce latency by overlapping dependent kernels and communication while specializing attention, MoE and draft sampling for small batches. These kernels live in [sgl-nvidia-mega](https://github.com/sgl-project/sgl-nvidia-mega) which accelerates both target verification and draft execution for DeepSeek-V4.1-Flash with DSpark on NVIDIA GB300 GPUs.
 
 **What batch one looks like.** DSpark drafts five tokens per step, and the target model checks them together with the last accepted token, so every request adds six rows to a verify step. One, two, four and eight requests mean 6, 12, 24 and 48 rows. Six rows is very little work for a kernel. The attention `wo_a` projection streams 16 MiB of weights per GPU to produce them, and every tensor-parallel boundary waits for the other three GPUs. In SGLang's stock path, one verify step at one request runs 1,205 GPU kernels.
 
