@@ -51,11 +51,11 @@ On NVIDIA GPUs, we reduce latency by overlapping dependent kernels and communica
 
 <p style="font-size: 1.375rem; font-weight: 700; color: #111; margin-top: 1.5rem;">Low-Latency-Specific Optimizations</p>
 
-**1. Overlap dependent kernels.** Programmatic dependent launch (PDL) lets a kernel start while its predecessor is still running. It can prepare barriers, set up tensor memory and load weights before waiting for the input it needs. SGLang already uses PDL. The plugin moves dependency releases earlier so more of this preparation overlaps with ongoing computation. For example, the MoE reduction releases the next layer’s first projection as soon as it starts polling for peer results.
+**1. Launch the next kernel before its input exists.** Programmatic dependent launch (PDL) lets a kernel start while its predecessor is still running. It can prepare barriers, set up tensor memory and load weights before waiting for the input it needs. SGLang already uses PDL. The plugin moves dependency releases earlier so more of this preparation overlaps with ongoing computation. For example, the MoE reduction releases the next layer’s first projection as soon as it starts polling for peer results.
 
 The attention path also uses projection GEMMs specialized for small batches and applies RoPE while loading the query to remove a separate kernel. Where dependencies allow it, attention begins gathering KV data before waiting for the query. At one request, the plugin also moves independent Engram lookups and projections onto a side stream at the start of the step. Their all-reduces stay on the main stream to preserve communication order across GPUs.
 
-**2. Overlap computation and communication.** After the attention output projection, each GPU holds a partial result that must be reduced across GPUs. SGLang’s standard path uses two kernels: the GEMM writes its output, then a fused kernel reads it back, sends it to peers and performs the reduction, mHC update and normalization.
+**2. Publish the projection output from the GEMM epilogue.** After the attention output projection, each GPU holds a partial result that must be reduced across GPUs. SGLang’s standard path uses two kernels: the GEMM writes its output, then a fused kernel reads it back, sends it to peers and performs the reduction, mHC update and normalization.
 
 The plugin keeps two kernels but moves the send into the GEMM’s epilogue. Each CTA publishes its completed tile directly from registers to peer GPUs through NVLink multicast stores while other tiles are still being computed. The consumer starts through PDL and waits for the published results before reducing them. This starts communication earlier and avoids rereading the partial output just to send it. The consumer’s computation remains unchanged.
 
@@ -63,7 +63,7 @@ The plugin keeps two kernels but moves the send into the GEMM’s epilogue. Each
 
 *The plugin moves the cross-GPU send into the GEMM epilogue. Both paths use two kernels; box sizes do not represent durations.*
 
-**3. Start expert GEMMs earlier.** At low concurrency, routing can become a substantial part of the MoE path. For steps with at most eight rows, every expert’s selected tokens fit into a single eight-row tile. The plugin uses a presence bitmap and population counts to place these tiles without scanning or sorting. It preserves SGLang’s top-k selections and releases the first expert GEMM immediately so barrier and tensor-memory setup can overlap routing.
+**3. Start the expert GEMMs before routing finishes.** At low concurrency, routing can become a substantial part of the MoE path. For steps with at most eight rows, every expert’s selected tokens fit into a single eight-row tile. The plugin uses a presence bitmap and population counts to place these tiles without scanning or sorting. It preserves SGLang’s top-k selections and releases the first expert GEMM immediately so barrier and tensor-memory setup can overlap routing.
 
 The expert GEMM also skips an all-zero tile introduced by padding the weight layout. The benefit comes from simpler routing, earlier execution and less unnecessary work; the standard kernels already use eight-row tiles too. In the profiled runs, the median MoE window falls from 44.4 µs to 36.5 µs while the second GEMM and reduction take about as long as before.
 
@@ -71,7 +71,7 @@ The expert GEMM also skips an all-zero tile introduced by padding the weight lay
 
 *One matched trace pair from the same GPU, layer and replay. GEMM1’s bar includes its wait for routing, so an earlier start can produce a longer bar while shortening the overall MoE window.*
 
-**4. Fuse sequential draft sampling.** DSpark’s Markov head proposes tokens sequentially. The plugin combines all five proposals into one kernel launch per GPU and keeps head weights in registers while coordinating token selection across GPUs. This reduces the profiled proposal span from 85.1 µs to 34.2 µs without changing SGLang’s speculative worker or acceptance logic.
+**4. Keep sequential draft sampling in one kernel.** DSpark’s Markov head proposes tokens sequentially. The plugin combines all five proposals into one kernel launch per GPU and keeps head weights in registers while coordinating token selection across GPUs. This reduces the profiled proposal span from 85.1 µs to 34.2 µs without changing SGLang’s speculative worker or acceptance logic.
 
 **Serving results.** On a static workload with 8K input tokens and 1K output tokens, the NVIDIA plugin improves per-user decode speed by 12–38% across one to eight concurrent requests on four GB300 GPUs. Both runs use the same SGLang setup with the plugin enabled or disabled and a simulated mean speculative acceptance length of 3.51.
 
