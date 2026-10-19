@@ -38,9 +38,7 @@ The AMD implementation is compatible with decode graphs and integrates directly 
 
 On NVIDIA GPUs, we reduce latency by overlapping dependent kernels and communication while specializing attention, MoE and draft sampling for small batches. These kernels live in [sgl-nvidia-mega](https://github.com/sgl-project/sgl-nvidia-mega) which accelerates both target verification and draft execution for DeepSeek-V4.1-Flash with DSpark on NVIDIA GB300 GPUs.
 
-**What batch one looks like.** DSpark drafts five tokens per step, and the target model checks them together with the last accepted token, so every request adds six rows to a verify step. One, two, four and eight requests mean 6, 12, 24 and 48 rows. Six rows is very little work for a kernel. The attention `wo_a` projection streams 16 MiB of weights per GPU to produce them, and every tensor-parallel boundary waits for the other three GPUs. In SGLang's stock path, one verify step at one request runs 1,205 GPU kernels.
-
-**Where the time goes.** We profiled warmed CUDA-graph replays at one request: five target-verify and five draft replays on each of the four GPUs, with CPU stage annotations and launch correlation IDs assigning GPU work to replays. The plugin removes only 16 kernels from the verify graph (1,189 instead of 1,205), yet the median decoder layer drops from 96.8 µs to 68.4 µs. Summed kernel time per replay falls by 2–5% while the replay's span falls by about a fifth, so most of the saving sits on the critical path rather than in the kernels' own work.
+At one request, DSpark verifies six token rows per step, leaving little work for each kernel while dependencies and cross-GPU communication add latency. In warmed CUDA-graph profiles, the plugin reduces the verify graph from 1,205 kernels to 1,189 but cuts the median decoder-layer latency from 96.8 µs to 68.4 µs. The gains come largely from reducing waits and overlapping work, with the largest reduction in the attention region. The table breaks down these changes before we walk through the main optimizations.
 
 | Region of one decoder layer, one request (median) | SGLang | With plugin |
 | --- | ---: | ---: |
@@ -49,9 +47,7 @@ On NVIDIA GPUs, we reduce latency by overlapping dependent kernels and communica
 | MoE, from routing to the reduced output | 44.4 µs | 36.5 µs |
 | Whole layer, from one routing step to the next | 96.8 µs | 68.4 µs |
 
-*Medians over 780–800 instances per arm (40 layers × 5 replays × 4 GPUs). Region medians do not add up to the layer median, and layers with Engram or an indexer are slower than the rest. The profiler stretches kernel durations, so we use these traces only to explain mechanisms; the serving numbers at the end come from separate runs without it.*
-
-The output-handoff fusion is the easiest change to point at, but the attention region in front of it moved the most. We go through the layer in execution order.
+*Medians over 780–800 instances per arm on four GPUs. Region medians do not add up to the whole-layer median. Profiling affects timings; these measurements explain the mechanisms rather than report serving performance.*
 
 **1. Launch the next kernel before its input exists.** [Programmatic dependent launch (PDL)](https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/programmatic-dependent-launch.html) lets a kernel start while its predecessor is still running. The new kernel calls `griddepcontrol.wait` only right before it reads the predecessor's output, so barrier and tensor-memory setup, weight loads and reads of KV entries the graph already wrote can all happen earlier. How early is up to the predecessor, which releases its dependents with `griddepcontrol.launch_dependents` or by finishing.
 
