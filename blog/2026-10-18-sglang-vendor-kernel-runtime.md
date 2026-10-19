@@ -73,7 +73,7 @@ The expert GEMM also skips an all-zero tile introduced by padding the weight lay
 
 **4. Keep sequential draft sampling in one kernel.** DSpark’s Markov head proposes tokens sequentially. The plugin combines all five proposals into one kernel launch per GPU and keeps head weights in registers while coordinating token selection across GPUs. This reduces the profiled proposal span from 85.1 µs to 34.2 µs without changing SGLang’s speculative worker or acceptance logic.
 
-**Serving results.** On a static workload with 8K input tokens and 1K output tokens, the NVIDIA plugin improves per-user decode speed by 12–38% across one to eight concurrent requests on four GB300 GPUs. Both runs use the same SGLang setup with the plugin enabled or disabled and a simulated mean speculative acceptance length of 3.51.
+**Serving results.** On an 8K-input / 1K-output workload, the NVIDIA plugin improves per-user decode speed by 12–38% at 1–8 concurrent requests on four GB300 GPUs. Both runs use the same setup and simulated mean acceptance length of 3.51, changing only the plugin flag.
 
 ![Per-user decode speed versus aggregate output throughput per GPU for DeepSeek-V4.1-Flash on four GB300 GPUs, with and without the NVIDIA plugin](/images/blog/sglang-vendor-kernel-runtime/nvidia-low-concurrency.svg)
 
