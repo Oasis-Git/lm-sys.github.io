@@ -32,5 +32,5 @@
 <text x="647.5" y="608.0" text-anchor="middle" style="font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:400;fill:#52514e">Concurrent AgentX sessions</text>
 <text x="36.0" y="650.0" text-anchor="start" style="font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:400;fill:#26364c">Plugin off: SGLang baseline  |  Plugin on: --monokernel-backend amd</text>
 <text x="36.0" y="684.0" text-anchor="start" style="font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:400;fill:#26364c">Fixed acceptance: 3.51 tokens / verify step in both arms. P90 interactivity = 1 / P90 inter-token latency.</text>
-<text x="36.0" y="716.0" text-anchor="start" style="font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:400;fill:#26364c">Source: reported results in sgl-project/sglang#43984, the in-tree prototype of the sgl-amd-mono kernels.</text>
+<text x="36.0" y="716.0" text-anchor="start" style="font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:400;fill:#26364c">Source: reported results from the in-tree prototype of the sgl-amd-mono kernels.</text>
 </svg>
