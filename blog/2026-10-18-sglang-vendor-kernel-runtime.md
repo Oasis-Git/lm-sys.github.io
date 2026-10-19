@@ -98,7 +98,7 @@ At low concurrency, each decoder layer runs dozens of small kernels and two tens
 
 ![Schematic timeline of one DeepSeek-V4.1 layer at batch size 1. The standard path runs dozens of small kernels with an idle gap at every launch boundary and two all-reduces that stop computation. With the AMD plugin, the layer runs as two FlyDSL launches, K1 and K2, where weights that do not depend on routing load early and partial sums go to peer GPUs while computation continues.](/images/blog/sglang-vendor-kernel-runtime/amd-mono-layer.svg)
 
-*One DeepSeek-V4.1 layer at batch size 1 on SGLang's standard path and with the AMD plugin. Numbered markers pair each cost of the standard path with the change that removes it. The timeline is schematic; it does not represent measured durations.*
+*The plugin replaces dozens of small kernels with two persistent launches, loads weights early and overlaps the cross-GPU sums with computation. Box sizes do not represent durations.*
 
 #### Two persistent launches per layer
 
@@ -113,6 +113,10 @@ Each value a stage produces is stored together with a tag for the current decode
 As each output-projection tile is computed, K2 pushes it to every GPU's memory, and each GPU sums the pieces in rank order while other workgroups are still producing tiles ([push and reduce stages](https://github.com/sgl-project/sgl-amd-mono/blob/e952b221aafc05ef5adb84d2caf942f7283c1f0b/sgl_amd_mono/deepseek_v41/gfx950/stages/seam.py)). The MoE output is reduced the same way. Every cross-GPU wait has a deadline below SGLang's watchdog timeout; a missed deadline stops the launch on every GPU instead of hanging the server.
 
 The AMD implementation is compatible with decode graphs and integrates directly with SGLang’s graph runner. Kernels are compiled and buffers are prepared during initialization. SGLang then captures the specialized execution path for each supported shape and replays it through the existing serving flow.
+
+#### Serving results
+
+In AgentX trace replay, the AMD plugin improves P90 per-user token generation speed by 45–56% at 1, 4 and 8 concurrent sessions on four MI355X GPUs, as shown in the overview figure. Both runs use the same AgentX recipe with DSpark speculative decoding and TP4.
 
 ## Plugin System: Design and Integration
 
