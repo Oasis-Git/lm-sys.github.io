@@ -77,7 +77,7 @@ The expert GEMM also skips an all-zero tile introduced by padding the weight lay
 
 ![Per-user decode speed versus aggregate output throughput per GPU for DeepSeek-V4.1-Flash on four GB300 GPUs, with and without the NVIDIA plugin](/images/blog/sglang-vendor-kernel-runtime/nvidia-low-concurrency.svg)
 
-*DeepSeek-V4.1-Flash with DSpark · 4 × GB300 · 8K input / 1K output. Throughput includes prefill. Small dots show individual passes; bars show the range of fresh-launch means, not confidence intervals.*
+*DeepSeek-V4.1-Flash with DSpark · 4 × GB300 · 8K input / 1K output.*
 
 ## Plugin System: Design and Integration
 
