@@ -75,22 +75,11 @@ The expert GEMM also skips an all-zero tile introduced by padding the weight lay
 
 GPUs exchange candidate tokens through a shared mailbox that coordinates both the cross-GPU argmax and synchronization between proposals. Each wait has a deadline so a stalled peer causes a fault rather than an indefinite hang. In the profiled runs, the proposal span drops from 85.1 µs to 34.2 µs. SGLang’s speculative worker and acceptance logic remain unchanged.
 
-**Serving results.** Both arms ran on the same four-GPU GB300 node with the same software, effective server arguments and environment. The only difference was `--enable-nvidia-megakernel`. We started four fresh servers in off/on/on/off order, and each one measured concurrency 1, 2, 4 and 8 forward and then in reverse. Inputs were 8,192 tokens and outputs 1,024 tokens, with identical prompts in both arms. At concurrency one, each pass warmed up for at least 60 seconds and then timed 30 requests; higher concurrency used 2C warmup and 5C timed requests. We kept all 800 timed requests.
+**Serving results.** On a static workload with 8K input tokens and 1K output tokens, the NVIDIA plugin improves per-user decode speed by 12–38% across one to eight concurrent requests on four GB300 GPUs. Both runs use the same SGLang setup with the plugin enabled or disabled and a simulated mean speculative acceptance length of 3.51.
 
 ![Per-user decode speed versus aggregate output throughput per GPU for DeepSeek-V4.1-Flash on four GB300 GPUs, with and without the NVIDIA plugin](/images/blog/sglang-vendor-kernel-runtime/nvidia-low-concurrency.svg)
 
-*DeepSeek-V4.1-Flash · 4 × GB300 · TP4 · DSpark block size 5 · FP8 KV cache · simulated mean acceptance length 3.51 in both arms. Large markers average the four pass summaries per arm, small dots are single passes, and bars span the two fresh-launch means (they are not confidence intervals). Lines connect measured points only.*
-
-| Requests | Per user, off | Per user, on | Change | Per GPU, off | Per GPU, on |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 1 | 745.6 | 1,030.2 | +38.2% | 165.8 | 219.3 |
-| 2 | 647.6 | 837.5 | +29.3% | 266.3 | 327.1 |
-| 4 | 541.0 | 658.1 | +21.6% | 408.5 | 468.6 |
-| 8 | 373.0 | 416.3 | +11.6% | 552.8 | 599.2 |
-
-Per-user decode speed, in tokens/s per user, is `(output tokens − 1) / (HTTP completion time − first text arrival)`, using the client's p50 summary. At one request, a new chunk reaches the client every 3.40 ms instead of 4.70 ms (median gap between streamed chunks, one chunk per decoding step). Aggregate throughput, in output tokens/s per GPU, is measured on its own: total output tokens over the whole timed interval, prefill included, divided by four GPUs. Time to first token barely moves (173.9 ms off, 175.5 ms on at one request) because prefill runs SGLang's path. That unchanged prefill time is why the throughput gains are smaller than the decode gains.
-
-Both arms simulate a mean acceptance length of 3.51 so that they do the same amount of speculative work. This is a control, not a measured acceptance rate for a real workload; completed tokens per verify call ranged from 3.483 to 3.524 across the measured points. Four low-concurrency points are not a full Pareto frontier. Both arms use per-rank Engram host tables, with 100% huge-page coverage reported for both Engram layers on every rank. Pinned versions: SGLang `7b7015e72e4f` (the integration in [PR #44945](https://github.com/sgl-project/sglang/pull/44945)), plugin `d47deb3390e1`, model revision `314113f8a7da`, PyTorch 2.14.1+cu130 on CUDA 13.
+*DeepSeek-V4.1-Flash with DSpark · 4 × GB300 · 8K input / 1K output. Throughput includes prefill. Small dots show individual passes; bars show the range of fresh-launch means, not confidence intervals.*
 
 ## Plugin System: Design and Integration
 
