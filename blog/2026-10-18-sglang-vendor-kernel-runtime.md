@@ -12,13 +12,18 @@ Low-latency inference offers many opportunities for optimizations tailored to sp
 
 *AgentX · DeepSeek-V4.1-Flash with DSpark. AMD results use the in-tree kernel prototype.*
 
-**Table of Contents**
-
-1. [Kernels for Low-Latency Inference](#kernels-for-low-latency-inference)
-   - [AMD Low-Latency Kernels](#amd-low-latency-kernels)
-   - [NVIDIA Low-Latency Kernels](#nvidia-low-latency-kernels)
-2. [Plugin System: Design and Integration](#plugin-system-design-and-integration)
-3. [Future Plans](#future-plans)
+<nav aria-label="Table of contents" style="margin: 1.5rem 0; line-height: 1.6;">
+<p style="margin: 0 0 0.5rem;"><strong>Table of Contents</strong></p>
+<ol style="margin: 0; padding-left: 1.5rem; list-style-type: decimal;">
+<li><a href="#kernels-for-low-latency-inference">Kernels for Low-Latency Inference</a>
+<ul style="margin: 0.25rem 0; padding-left: 1.5rem; list-style-type: none;">
+<li><a href="#amd-low-latency-kernels">AMD Low-Latency Kernels</a></li>
+<li><a href="#nvidia-low-latency-kernels">NVIDIA Low-Latency Kernels</a></li>
+</ul></li>
+<li><a href="#plugin-system-design-and-integration">Plugin System: Design and Integration</a></li>
+<li><a href="#future-plans">Future Plans</a></li>
+</ol>
+</nav>
 
 ## Kernels for Low-Latency Inference
 
