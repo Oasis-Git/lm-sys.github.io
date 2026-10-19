@@ -122,7 +122,7 @@ Specialized kernels can require substantial amounts of code. Each combination of
 
 *External kernel libraries connect to SGLang through registration, validation, build and runtime dispatch. The diagram shows the shared design; the AMD and NVIDIA interfaces are still evolving.*
 
-To manage these low-latency improvements, we introduce a plugin system for external kernel libraries. [sgl-amd-mono](https://github.com/sgl-project/sgl-amd-mono) and [sgl-nvidia-mega](https://github.com/sgl-project/sgl-nvidia-mega) keep specialized kernels, weight preparation and model-specific execution code together so developers can optimize them as a unit. Each library declares its requirements and supported configurations through model specifications. SGLang uses these specifications to integrate the implementation with its serving runtime. Kernel teams can iterate in their own repositories while reusing SGLang's scheduling and runtime resources.
+The plugin system connects these external libraries to SGLang through model specifications that declare their requirements and supported configurations. Kernel teams can develop their implementations independently while reusing SGLang’s scheduling and runtime resources.
 
 The integration separates startup preparation from execution:
 
