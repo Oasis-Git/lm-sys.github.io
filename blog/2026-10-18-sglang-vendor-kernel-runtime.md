@@ -1,6 +1,6 @@
 ---
 title: "SGLang Low-Latency Mode: Kernels and Runtime"
-author: "SGLang, AMD and NVIDIA teams"
+author: "SGLang, NVIDIA and AMD teams"
 date: "October 18, 2026"
 previewImg: /images/blog/sglang-vendor-kernel-runtime/runtime.svg
 type: blog
@@ -16,11 +16,11 @@ type: blog
 .article:has(#kernels-for-low-latency-inference) h4 .anchor svg { display: none; }
 </style>
 
-Low-latency inference offers many opportunities for optimizations tailored to specific models, hardware and workloads. These optimizations often require extensive kernel fusion and duplicate code across implementations, making them difficult to maintain. To support this specialization, we introduce **SGLang Low-Latency Mode**. It brings specialized kernels into SGLang through a plugin framework and delivers substantial latency reductions on both AMD and NVIDIA GPUs. In AgentX trace replay, these optimizations improve P90 per-user token generation speed by up to **1.56× on AMD MI355X** and **1.38× on NVIDIA GB300** compared with the respective SGLang baselines.
+Low-latency inference offers many opportunities for optimizations tailored to specific models, hardware and workloads. These optimizations often require extensive kernel fusion and duplicate code across implementations, making them difficult to maintain. To support this specialization, we introduce **SGLang Low-Latency Mode**. It brings specialized kernels into SGLang through a plugin framework and delivers substantial latency reductions on both NVIDIA and AMD GPUs. In AgentX trace replay, these optimizations improve P90 per-user token generation speed by up to **1.38× on NVIDIA GB300** and **1.56× on AMD MI355X** compared with the respective SGLang baselines.
 
-![AgentX performance on AMD MI355X and NVIDIA GB300 at 1, 4 and 8 concurrent sessions.](/images/blog/sglang-vendor-kernel-runtime/figure-1.svg)
+![AgentX performance on NVIDIA GB300 and AMD MI355X at 1, 4 and 8 concurrent sessions.](/images/blog/sglang-vendor-kernel-runtime/figure-1.svg)
 
-*AgentX · DeepSeek-V4.1-Flash with DSpark · AMD MI355X and NVIDIA GB300.*
+*AgentX · DeepSeek-V4.1-Flash with DSpark · NVIDIA GB300 and AMD MI355X.*
 
 <!-- Figure 1 source notes: AMD results use the in-tree kernel prototype. NVIDIA results use sgl-nvidia-mega on 4 GB300 GPUs (TP4) with simulated acceptance fixed at 3.51. AMD acceptance setting remains to be confirmed. -->
 
@@ -29,8 +29,8 @@ Low-latency inference offers many opportunities for optimizations tailored to sp
 <ol style="margin: 0; padding-left: 1.5rem; list-style-type: decimal;">
 <li><a href="#kernels-for-low-latency-inference">Kernels for Low-Latency Inference</a>
 <ul style="margin: 0.25rem 0; padding-left: 1.5rem; list-style-type: none;">
-<li><a href="#amd-low-latency-kernels">AMD Low-Latency Kernels</a></li>
 <li><a href="#nvidia-low-latency-kernels">NVIDIA Low-Latency Kernels</a></li>
+<li><a href="#amd-low-latency-kernels">AMD Low-Latency Kernels</a></li>
 </ul></li>
 <li><a href="#plugin-system-design-and-integration">Plugin System: Design and Integration</a></li>
 <li><a href="#future-plans">Future Plans</a></li>
@@ -38,34 +38,6 @@ Low-latency inference offers many opportunities for optimizations tailored to sp
 </div>
 
 ## Kernels for Low-Latency Inference
-
-### AMD Low-Latency Kernels
-
-On AMD GPUs, we reduce latency by combining much of a decoder layer’s computation and communication into a few persistent kernels. These kernels live in [sgl-amd-mono](https://github.com/sgl-project/sgl-amd-mono) which accelerates both target verification and draft execution for DeepSeek-V4.1-Flash with DSpark on AMD Instinct MI355X and MI350X GPUs.
-
-At low concurrency, each decoder layer runs dozens of small kernels and two tensor-parallel all-reduces. Three costs dominate:
-
-- **Launch overhead:** HIP graphs remove the CPU's launch work, but each small kernel still costs 2-4 µs on the GPU.
-- **Idle boundaries:** Each kernel must finish before the next starts, so compute units idle while one kernel drains and the next ramps up, and weight loading pauses.
-- **Communication stops:** Each layer waits twice for an all-reduce across GPUs, with no computation running.
-
-![Schematic timeline of one DeepSeek-V4.1 layer at batch size 1. The standard path runs dozens of small kernels with an idle gap at every launch boundary and two all-reduces that stop computation. With the AMD plugin, the layer runs as two FlyDSL launches, K1 and K2, where weights that do not depend on routing load early and partial sums go to peer GPUs while computation continues.](/images/blog/sglang-vendor-kernel-runtime/amd-mono-layer.svg)
-
-*One DeepSeek-V4.1 layer at batch size 1 on SGLang's standard path and with the AMD plugin. Numbered markers pair each cost of the standard path with the change that removes it. The timeline is schematic; it does not represent measured durations.*
-
-#### Two persistent launches per layer
-
-Persistent FlyDSL kernels combine most of each layer into two launches. **K1** handles the mHC update, query and KV projections and KV-cache writes. **K2** handles attention, output projections, the remaining mHC update, MoE and both all-reduces. Index layers add compression, **K2i** scoring and top-k between them. The launch boundary makes K1’s KV writes visible across the GPU before K2 reads them.
-
-#### Overlapping stages inside a launch
-
-Each value a stage produces is stored together with a tag for the current decode step, so the next stage, on the same GPU or another one, starts on a value as soon as its tag matches. No separate flag or reset between steps is needed. Weights that do not depend on routing load before their inputs arrive: K1's projection weights before the norm finishes, and in K2 the mHC mix weights and the shared expert's weights before the data they multiply. Routed-expert weights load once the router has chosen the experts.
-
-#### Bringing the all-reduce into the kernel
-
-As each output-projection tile is computed, K2 pushes it to every GPU's memory, and each GPU sums the pieces in rank order while other workgroups are still producing tiles ([push and reduce stages](https://github.com/sgl-project/sgl-amd-mono/blob/e952b221aafc05ef5adb84d2caf942f7283c1f0b/sgl_amd_mono/deepseek_v41/gfx950/stages/seam.py)). The MoE output is reduced the same way. Every cross-GPU wait has a deadline below SGLang's watchdog timeout; a missed deadline stops the launch on every GPU instead of hanging the server.
-
-The AMD implementation is compatible with decode graphs and integrates directly with SGLang’s graph runner. Kernels are compiled and buffers are prepared during initialization. SGLang then captures the specialized execution path for each supported shape and replays it through the existing serving flow.
 
 ### NVIDIA Low-Latency Kernels
 
@@ -114,6 +86,34 @@ On an 8K-input / 1K-output workload, the NVIDIA plugin improves per-user decode 
 
 *DeepSeek-V4.1-Flash with DSpark · 4 × GB300 · 8K input / 1K output.*
 
+### AMD Low-Latency Kernels
+
+On AMD GPUs, we reduce latency by combining much of a decoder layer’s computation and communication into a few persistent kernels. These kernels live in [sgl-amd-mono](https://github.com/sgl-project/sgl-amd-mono) which accelerates both target verification and draft execution for DeepSeek-V4.1-Flash with DSpark on AMD Instinct MI355X and MI350X GPUs.
+
+At low concurrency, each decoder layer runs dozens of small kernels and two tensor-parallel all-reduces. Three costs dominate:
+
+- **Launch overhead:** HIP graphs remove the CPU's launch work, but each small kernel still costs 2-4 µs on the GPU.
+- **Idle boundaries:** Each kernel must finish before the next starts, so compute units idle while one kernel drains and the next ramps up, and weight loading pauses.
+- **Communication stops:** Each layer waits twice for an all-reduce across GPUs, with no computation running.
+
+![Schematic timeline of one DeepSeek-V4.1 layer at batch size 1. The standard path runs dozens of small kernels with an idle gap at every launch boundary and two all-reduces that stop computation. With the AMD plugin, the layer runs as two FlyDSL launches, K1 and K2, where weights that do not depend on routing load early and partial sums go to peer GPUs while computation continues.](/images/blog/sglang-vendor-kernel-runtime/amd-mono-layer.svg)
+
+*One DeepSeek-V4.1 layer at batch size 1 on SGLang's standard path and with the AMD plugin. Numbered markers pair each cost of the standard path with the change that removes it. The timeline is schematic; it does not represent measured durations.*
+
+#### Two persistent launches per layer
+
+Persistent FlyDSL kernels combine most of each layer into two launches. **K1** handles the mHC update, query and KV projections and KV-cache writes. **K2** handles attention, output projections, the remaining mHC update, MoE and both all-reduces. Index layers add compression, **K2i** scoring and top-k between them. The launch boundary makes K1’s KV writes visible across the GPU before K2 reads them.
+
+#### Overlapping stages inside a launch
+
+Each value a stage produces is stored together with a tag for the current decode step, so the next stage, on the same GPU or another one, starts on a value as soon as its tag matches. No separate flag or reset between steps is needed. Weights that do not depend on routing load before their inputs arrive: K1's projection weights before the norm finishes, and in K2 the mHC mix weights and the shared expert's weights before the data they multiply. Routed-expert weights load once the router has chosen the experts.
+
+#### Bringing the all-reduce into the kernel
+
+As each output-projection tile is computed, K2 pushes it to every GPU's memory, and each GPU sums the pieces in rank order while other workgroups are still producing tiles ([push and reduce stages](https://github.com/sgl-project/sgl-amd-mono/blob/e952b221aafc05ef5adb84d2caf942f7283c1f0b/sgl_amd_mono/deepseek_v41/gfx950/stages/seam.py)). The MoE output is reduced the same way. Every cross-GPU wait has a deadline below SGLang's watchdog timeout; a missed deadline stops the launch on every GPU instead of hanging the server.
+
+The AMD implementation is compatible with decode graphs and integrates directly with SGLang’s graph runner. Kernels are compiled and buffers are prepared during initialization. SGLang then captures the specialized execution path for each supported shape and replays it through the existing serving flow.
+
 ## Plugin System: Design and Integration
 
 Specialized kernels can require substantial amounts of code. Each combination of hardware, model architecture and parallel configuration may need its own implementation. Different workloads add further specialization. More combinations mean more code to review, test and maintain. Bringing every implementation into SGLang would make the core codebase increasingly difficult to maintain and place a growing workload on its reviewers and maintainers.
@@ -137,7 +137,7 @@ This design lets kernel teams ship focused optimizations without adding every sp
 
 ### Broader Model Support
 
-Megakernel development is underway for GLM-5.3, K3, MiniMax M3 and other models on both AMD and NVIDIA GPUs. We plan to integrate these implementations into the plugin framework as they become ready. These low-latency kernels show promising potential for further performance improvements.
+Megakernel development is underway for GLM-5.3, K3, MiniMax M3 and other models on both NVIDIA and AMD GPUs. We plan to integrate these implementations into the plugin framework as they become ready. These low-latency kernels show promising potential for further performance improvements.
 
 ### CI and Performance Validation
 
