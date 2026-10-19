@@ -8,11 +8,31 @@ type: blog
 
 Low-latency inference offers many opportunities for optimizations tailored to specific models, hardware and workloads. These optimizations often require extensive kernel fusion and duplicate code across implementations, making them difficult to maintain. To support this specialization, we introduce **SGLang Low-Latency Mode**. It brings specialized kernels into SGLang through a plugin framework and delivers substantial latency reductions on both AMD and NVIDIA GPUs.
 
-*[Figure 1: Low-latency inference results]*
+<p align="center"><img src="/images/blog/sglang-vendor-kernel-runtime/amd-agentx-bs1.svg" width="100%" alt="AgentX P90 interactivity at one concurrent user for DeepSeek-V4.1-Flash on AMD Instinct MI355X: 406.5 tokens per second per user with SGLang's default path and 610.3 with Low-Latency Mode, a 50 percent gain."></p>
+
+*Figure 1. AgentX at one concurrent user: DeepSeek-V4.1-Flash on AMD Instinct™ MI355X (TP4, DSpark). Low-Latency Mode raises P90 interactivity from 406.5 to 610.3 tokens/s per user.*
 
 ## Kernels for Low-Latency Inference
 
 ### AMD Low-Latency Kernels
+
+Agentic workloads keep only a few requests in flight, so each decode step has little work to spread across the GPU. On AMD Instinct™ MI350 Series GPUs, SGLang's standard path runs each DeepSeek-V4.1-Flash decoder layer as dozens of small kernels and two tensor-parallel all-reduces. At batch size one, a DSpark draft-and-verify cycle runs about 1,300 kernels in 9.1 ms. At this scale, the time between kernels matters more than the computation inside them:
+
+- **Launch overhead:** HIP graphs remove the CPU's launch work, but each small kernel still costs 2-4 µs on the GPU.
+- **Idle boundaries:** Each kernel must finish before the next starts, so compute units idle while one kernel drains and the next ramps up, and weight loading pauses.
+- **Communication stops:** Each layer waits twice for an all-reduce across GPUs, with no computation running.
+
+[sgl-amd-mono](https://github.com/sgl-project/sgl-amd-mono) addresses these costs with mono kernels: persistent kernels, written in FlyDSL, that each run a large part of a layer in one launch. A mono kernel keeps one workgroup on every compute unit for the whole launch. Workgroups move from stage to stage, load the next stage's weights while earlier stages compute, and pass partial results through tagged buffers, so each stage starts on the data that is ready. Each GPU writes partial sums directly into its peers' memory, so the all-reduce overlaps with computation.
+
+![Schematic timeline of one DeepSeek-V4.1 layer at batch size 1. The standard path runs dozens of small kernels with an idle gap at every launch boundary and two all-reduces that stop computation. Low-Latency Mode runs the layer as two FlyDSL launches, K1 and K2, where weights load early and partial sums go to peer GPUs while computation continues.](/images/blog/sglang-vendor-kernel-runtime/amd-mono-layer.svg)
+
+*One DeepSeek-V4.1 layer at batch size 1 on SGLang's standard path and in Low-Latency Mode. Numbered markers pair each cost of the standard path with the mono-kernel idea that removes it. The timeline is schematic, not measured.*
+
+For DeepSeek-V4.1, each decoder layer runs as two launches. K1 prepares attention: it applies the mHC update, computes the query and key-value projections and writes the sliding-window KV cache. K2 runs the rest of the layer: sparse attention, the output projections, the router, the experts and both all-reduces. On the eight layers with a compressed attention index, SGLang's compressor runs between the launches, and a third launch, K2i, scores the FP4 index keys for SGLang's top-k. The layer is split at attention because attention reads KV entries written by every workgroup of K1. MI350 Series GPUs divide their compute units across eight chiplets with separate L2 caches, so a launch boundary is the cheapest way to make those writes visible across the GPU. The DSpark draft model runs on the same kernels.
+
+FlyDSL, AMD's MLIR-based Python kernel language, gives explicit control over work assignment, memory layout, cross-GPU synchronization and instruction selection. The kernels compile at startup, run inside SGLang's HIP graphs and read the weights SGLang has already loaded. Every cross-GPU wait has a deadline below SGLang's watchdog timeout, so a failure stops the server instead of hanging it or returning a token from a failed step.
+
+On MI355X with TP4 and DSpark, Low-Latency Mode raises AgentX P90 interactivity at one concurrent user by 50%, from 406.5 to 610.3 tokens/s per user (Figure 1), and total throughput per GPU by 23%. The gain holds at four and eight users, at 56% and 45%. Steps larger than 48 rows run SGLang's standard path. Accuracy remains comparable: GSM8K scores 0.901 with Low-Latency Mode and 0.911 without it, and needle-in-a-haystack retrieval passes 60 of 60 at up to 120K tokens.
 
 ### NVIDIA Low-Latency Kernels
 
