@@ -22,7 +22,7 @@ type: blog
 - **MoE kernels for a handful of tokens.** A routing kernel and two block-scaled GEMMs process tokens in small tiles grouped by expert and read SGLang's quantized expert weights in place. The router's top-k matches SGLang's bit for bit.
 - **Attention that loads ahead.** The attention kernel starts loading the KV cache before the kernel it depends on has finished, wherever the cache writes allow it.
 - **The draft step on the GPU.** DSpark's draft proposal runs in one kernel per GPU, and the GPUs agree on each drafted token inside it, with no host-side synchronization.
-- **Chained kernels with safeguards.** Kernels stay separate launches chained with programmatic dependent launch (PDL), which on GB300 costs less than synchronizing all blocks of one persistent kernel. At startup each kernel is checked against SGLang's own op and stays off if the check fails, and every cross-GPU wait has a deadline.
+- **Chained kernels with safeguards.** Kernels stay separate launches chained with programmatic dependent launch (PDL), which on GB300 costs less than synchronizing all blocks of one persistent kernel. Kernels are tested against the ops they replace, and every cross-GPU wait has a deadline, so a stalled peer makes the rank fault instead of hang.
 
 Prefill and every step the plugin does not cover run SGLang's own code.
 
@@ -46,7 +46,7 @@ Prefill and every step the plugin does not cover run SGLang's own code.
 
 ### Graph Capture and Replay
 
-**NVIDIA plugin.** Coverage is decided from host state alone, so all ranks agree and a captured CUDA graph replays the decision made at capture. Nothing is compiled or allocated inside a step. After capture, SGLang checks that the cache buffers the plugin reads have not been reallocated.
+**NVIDIA plugin.** Coverage is decided from host state alone, so all ranks agree and a captured CUDA graph replays the decision made at capture. Nothing is compiled inside a step. After capture, SGLang checks that the cache buffers the plugin reads have not been reallocated.
 
 ## Future Plans
 
