@@ -71,37 +71,46 @@
 <text x="48.0" y="298.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700" fill="#26364c">Low-Latency</text>
 <text x="48.0" y="322.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700" fill="#26364c">Mode</text>
 <text x="48.0" y="346.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#5f6f84">two FlyDSL launches</text>
-<rect x="200.0" y="268.0" width="204.0" height="156.0" rx="8" fill="#f3effa" stroke="#a596cf" stroke-width="1.5"/>
+<rect x="200.0" y="268.0" width="240.0" height="156.0" rx="8" fill="#f3effa" stroke="#a596cf" stroke-width="1.5"/>
 <text x="210.0" y="290.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#26364c">K1</text>
-<rect x="482.0" y="268.0" width="426.0" height="156.0" rx="8" fill="#f3effa" stroke="#a596cf" stroke-width="1.5"/>
-<text x="492.0" y="290.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#26364c">K2</text>
-<rect x="270.0" y="302.0" width="126.0" height="30.0" rx="4" fill="#ddd3f1" stroke="#a596cf" stroke-width="1.5"/>
-<text x="278.0" y="322.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">attention inputs</text>
-<rect x="210.0" y="342.0" width="100.0" height="30.0" rx="4" fill="#d7eeea" stroke="#6fb3aa" stroke-width="1.5"/>
-<text x="218.0" y="362.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">weights</text>
-<rect x="412.0" y="302.0" width="62.0" height="30.0" rx="4" fill="#ffffff" stroke="#8190a4" stroke-width="1.5" stroke-dasharray="6 5"/>
-<rect x="492.0" y="302.0" width="92.0" height="30.0" rx="4" fill="#ddd3f1" stroke="#a596cf" stroke-width="1.5"/>
-<text x="500.0" y="322.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">attention</text>
-<rect x="590.0" y="302.0" width="96.0" height="30.0" rx="4" fill="#ddd3f1" stroke="#a596cf" stroke-width="1.5"/>
-<text x="598.0" y="322.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">out proj</text>
-<rect x="692.0" y="302.0" width="206.0" height="30.0" rx="4" fill="#ddd3f1" stroke="#a596cf" stroke-width="1.5"/>
-<text x="700.0" y="322.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">router + experts</text>
-<rect x="492.0" y="342.0" width="236.0" height="30.0" rx="4" fill="#d7eeea" stroke="#6fb3aa" stroke-width="1.5"/>
-<text x="500.0" y="362.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">expert weights stream in</text>
-<rect x="632.0" y="382.0" width="104.0" height="30.0" rx="4" fill="#fbe7c6" stroke="#d6a24a" stroke-width="1.5"/>
-<text x="640.0" y="402.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">peer sums</text>
-<rect x="782.0" y="382.0" width="104.0" height="30.0" rx="4" fill="#fbe7c6" stroke="#d6a24a" stroke-width="1.5"/>
-<text x="790.0" y="402.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">peer sums</text>
-<circle cx="936.0" cy="317.0" r="12" fill="#26364c"/>
-<text x="936.0" y="322.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#ffffff">1</text>
-<text x="954.0" y="322.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">two launches per layer</text>
-<circle cx="936.0" cy="357.0" r="12" fill="#26364c"/>
-<text x="936.0" y="362.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#ffffff">2</text>
-<text x="954.0" y="362.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">weights load early</text>
-<circle cx="936.0" cy="397.0" r="12" fill="#26364c"/>
-<text x="936.0" y="402.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#ffffff">3</text>
-<text x="954.0" y="402.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">sums overlap compute</text>
-<path d="M443.0 334.0 L443.0 446.0" stroke="#8190a4" stroke-width="1.5" fill="none" stroke-dasharray="3 3"/>
+<rect x="518.0" y="268.0" width="450.0" height="156.0" rx="8" fill="#f3effa" stroke="#a596cf" stroke-width="1.5"/>
+<text x="528.0" y="290.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#26364c">K2</text>
+<rect x="210.0" y="302.0" width="92.0" height="30.0" rx="4" fill="#ddd3f1" stroke="#a596cf" stroke-width="1.5"/>
+<text x="218.0" y="322.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">mHC, norm</text>
+<rect x="308.0" y="302.0" width="118.0" height="30.0" rx="4" fill="#ddd3f1" stroke="#a596cf" stroke-width="1.5"/>
+<text x="316.0" y="322.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">q/kv, KV write</text>
+<rect x="210.0" y="342.0" width="150.0" height="30.0" rx="4" fill="#d7eeea" stroke="#6fb3aa" stroke-width="1.5"/>
+<text x="218.0" y="362.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">projection weights</text>
+<text x="212.0" y="402.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="400" fill="#5f6f84">no cross-GPU data</text>
+<rect x="448.0" y="302.0" width="62.0" height="30.0" rx="4" fill="#ffffff" stroke="#8190a4" stroke-width="1.5" stroke-dasharray="6 5"/>
+<rect x="528.0" y="302.0" width="78.0" height="30.0" rx="4" fill="#ddd3f1" stroke="#a596cf" stroke-width="1.5"/>
+<text x="536.0" y="322.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">attention</text>
+<rect x="612.0" y="302.0" width="70.0" height="30.0" rx="4" fill="#ddd3f1" stroke="#a596cf" stroke-width="1.5"/>
+<text x="620.0" y="322.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">out proj</text>
+<rect x="688.0" y="302.0" width="92.0" height="30.0" rx="4" fill="#ddd3f1" stroke="#a596cf" stroke-width="1.5"/>
+<text x="696.0" y="322.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">mHC, norm</text>
+<rect x="786.0" y="302.0" width="58.0" height="30.0" rx="4" fill="#ddd3f1" stroke="#a596cf" stroke-width="1.5"/>
+<text x="794.0" y="322.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">router</text>
+<rect x="850.0" y="302.0" width="110.0" height="30.0" rx="4" fill="#ddd3f1" stroke="#a596cf" stroke-width="1.5"/>
+<text x="858.0" y="322.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">experts</text>
+<rect x="612.0" y="342.0" width="92.0" height="30.0" rx="4" fill="#d7eeea" stroke="#6fb3aa" stroke-width="1.5"/>
+<text x="620.0" y="362.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">mix weights</text>
+<rect x="786.0" y="342.0" width="104.0" height="30.0" rx="4" fill="#d7eeea" stroke="#6fb3aa" stroke-width="1.5"/>
+<text x="794.0" y="362.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">shared expert</text>
+<rect x="648.0" y="382.0" width="104.0" height="30.0" rx="4" fill="#fbe7c6" stroke="#d6a24a" stroke-width="1.5"/>
+<text x="656.0" y="402.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">peer sums</text>
+<rect x="856.0" y="382.0" width="104.0" height="30.0" rx="4" fill="#fbe7c6" stroke="#d6a24a" stroke-width="1.5"/>
+<text x="864.0" y="402.4" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">peer sums</text>
+<circle cx="996.0" cy="317.0" r="12" fill="#26364c"/>
+<text x="996.0" y="322.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#ffffff">1</text>
+<text x="1014.0" y="322.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">two launches per layer</text>
+<circle cx="996.0" cy="357.0" r="12" fill="#26364c"/>
+<text x="996.0" y="362.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#ffffff">2</text>
+<text x="1014.0" y="362.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">weights load early</text>
+<circle cx="996.0" cy="397.0" r="12" fill="#26364c"/>
+<text x="996.0" y="402.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#ffffff">3</text>
+<text x="1014.0" y="402.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#26364c">sums overlap compute</text>
+<path d="M479.0 334.0 L479.0 446.0" stroke="#8190a4" stroke-width="1.5" fill="none" stroke-dasharray="3 3"/>
 <text x="200.0" y="466.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#5f6f84">Between K1 and K2, the launch boundary makes K1's KV writes visible across all eight XCDs.</text>
 <text x="200.0" y="488.0" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#5f6f84">On index layers, SGLang's compressor, K2i and top-k (dashed) run here.</text>
 <path d="M200.0 534.0 L1150.0 534.0" stroke="#8190a4" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
