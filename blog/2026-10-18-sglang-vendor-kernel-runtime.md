@@ -67,18 +67,6 @@ On NVIDIA GPUs, we reduce latency by overlapping dependent kernels and communica
 
 **4. Fuse sequential draft sampling.** DSpark proposes draft tokens sequentially, with each proposal depending on the previous token. The plugin handles all five proposals in one cooperative kernel launch per GPU instead of a chain of sampling kernels. It keeps the head weights in registers and coordinates token selection across GPUs within the kernel. SGLang’s speculative worker and acceptance logic remain unchanged.
 
-**Coverage.** Each path handles a range of verify rows, and dispatch looks at the row count of the CUDA graph being replayed. The table shows which of the paths above run at each concurrency we measured; the headers give requests, with verify rows in parentheses.
-
-| Plugin path | Rows | 1 (6) | 2 (12) | 4 (24) | 8 (48) |
-| --- | :---: | :---: | :---: | :---: | :---: |
-| Attention chain: early-released norm, `wq_b` and `wo_a` | 1–48 | ✓ | ✓ | ✓ | ✓ |
-| Small-batch sparse attention with RoPE on load | 1–24 | ✓ | ✓ | ✓ | |
-| Publishing GEMM and mailbox reduction (attention and MoE outputs) | 1–16 | ✓ | ✓ | | |
-| MoE top-k, route kernel and expert GEMM pair | 1–48 | ✓ | ✓ | ✓ | ✓ |
-| Low-latency `wqkv_a` GEMM and Engram prefetch | 1–8 | ✓ | | | |
-
-Fewer of these paths apply as concurrency rises, and each kernel gets more rows to work on; over the same range the per-user gain falls from 38% to 12%. When a shape is outside a path's range, only that operation falls back to SGLang's kernel and the rest of the step stays on the plugin. The supported setup needs full decode CUDA graphs. Kernels and buffers are prepared at startup, and every captured graph records which path it took. Prefill and eager fallback steps use SGLang's forward. The plugin's model specification lists a [numerical tolerance for every replaced operation](https://github.com/sgl-project/sgl-nvidia-mega/blob/d47deb3390e14741c9420ac702954e7611a14da1/sgl_nvidia_mega/deepseek_v41/spec.py#L131-L136). Several of them are exactly zero, and some replacements are not bitwise, such as the TF32 GEMM that computes the mHC coefficients.
-
 **Serving results.** Both arms ran on the same four-GPU GB300 node with the same software, effective server arguments and environment. The only difference was `--enable-nvidia-megakernel`. We started four fresh servers in off/on/on/off order, and each one measured concurrency 1, 2, 4 and 8 forward and then in reverse. Inputs were 8,192 tokens and outputs 1,024 tokens, with identical prompts in both arms. At concurrency one, each pass warmed up for at least 60 seconds and then timed 30 requests; higher concurrency used 2C warmup and 5C timed requests. We kept all 800 timed requests.
 
 ![Per-user decode speed versus aggregate output throughput per GPU for DeepSeek-V4.1-Flash on four GB300 GPUs, with and without the NVIDIA plugin](/images/blog/sglang-vendor-kernel-runtime/nvidia-low-concurrency.svg)
