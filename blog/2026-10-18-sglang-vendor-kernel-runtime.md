@@ -71,9 +71,7 @@ The expert GEMM also skips an all-zero tile introduced by padding the weight lay
 
 *One matched trace pair from the same GPU, layer and replay. GEMM1’s bar includes its wait for routing, so an earlier start can produce a longer bar while shortening the overall MoE window.*
 
-**4. Fuse sequential draft sampling.** DSpark’s Markov head proposes draft tokens one at a time, with each proposal depending on the previous token. The standard path runs a chain of embedding, projection, argmax and cross-GPU exchange kernels for every position. The plugin handles all five proposals in one cooperative launch per GPU and keeps each warp’s portion of the head weights in registers throughout the launch.
-
-GPUs exchange candidate tokens through a shared mailbox that coordinates both the cross-GPU argmax and synchronization between proposals. Each wait has a deadline so a stalled peer causes a fault rather than an indefinite hang. In the profiled runs, the proposal span drops from 85.1 µs to 34.2 µs. SGLang’s speculative worker and acceptance logic remain unchanged.
+**4. Fuse sequential draft sampling.** DSpark’s Markov head proposes tokens sequentially. The plugin combines all five proposals into one kernel launch per GPU and keeps head weights in registers while coordinating token selection across GPUs. This reduces the profiled proposal span from 85.1 µs to 34.2 µs without changing SGLang’s speculative worker or acceptance logic.
 
 **Serving results.** On a static workload with 8K input tokens and 1K output tokens, the NVIDIA plugin improves per-user decode speed by 12–38% across one to eight concurrent requests on four GB300 GPUs. Both runs use the same SGLang setup with the plugin enabled or disabled and a simulated mean speculative acceptance length of 3.51.
 
