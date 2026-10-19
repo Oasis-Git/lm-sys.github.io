@@ -16,7 +16,7 @@ Low-latency inference offers many opportunities for optimizations tailored to sp
 
 On AMD GPUs, we reduce latency by combining much of a decoder layer’s computation and communication into a few persistent kernels. These kernels live in [sgl-amd-mono](https://github.com/sgl-project/sgl-amd-mono) which accelerates both target verification and draft execution for DeepSeek-V4.1-Flash with DSpark on AMD Instinct MI355X and MI350X GPUs.
 
-At low concurrency, SGLang's standard path runs each decoder layer as dozens of small kernels and two tensor-parallel all-reduces. With a draft block size of five, one request produces six rows in a target verify step. At one or two concurrent requests, one draft-and-verify cycle runs about 1,300 kernels in about 9.1 ms on MI350X. Three costs dominate at this size:
+At low concurrency, each decoder layer runs dozens of small kernels and two tensor-parallel all-reduces. Three costs dominate:
 
 - **Launch overhead:** HIP graphs remove the CPU's launch work, but each small kernel still costs 2-4 µs on the GPU.
 - **Idle boundaries:** Each kernel must finish before the next starts, so compute units idle while one kernel drains and the next ramps up, and weight loading pauses.
