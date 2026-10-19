@@ -32,9 +32,7 @@ At low concurrency, each decoder layer runs dozens of small kernels and two tens
 
 **Bringing the all-reduce into the kernel.** As each output-projection tile is computed, K2 pushes it to every GPU's memory, and each GPU sums the pieces in rank order while other workgroups are still producing tiles ([push and reduce stages](https://github.com/sgl-project/sgl-amd-mono/blob/e952b221aafc05ef5adb84d2caf942f7283c1f0b/sgl_amd_mono/deepseek_v41/gfx950/stages/seam.py)). The MoE output is reduced the same way. Every cross-GPU wait has a deadline below SGLang's watchdog timeout; a missed deadline stops the launch on every GPU instead of hanging the server.
 
-The supported configuration uses decode graphs. Kernels compile and buffers are allocated at model initialization, and the graph records the selected path for each covered shape. Steps wider than 48 rows (more than eight requests at block size 5), prefill and unsupported configurations use SGLang's original forward.
-
-Accuracy is reported separately. The report gives GSM8K scores of 0.911 without the plugin and 0.901 with it (1,319 questions, TP4), and 60 of 60 on needle-in-a-haystack retrieval at 32K, 64K and 120K tokens. These are the observed results; the one-point GSM8K difference does not establish an accuracy change or numerical equivalence.
+The AMD implementation is compatible with decode graphs and integrates directly with SGLang’s graph runner.
 
 ### NVIDIA Low-Latency Kernels
 
