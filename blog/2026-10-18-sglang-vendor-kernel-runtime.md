@@ -64,7 +64,7 @@ On NVIDIA GPUs, we reduce latency by overlapping dependent kernels and communica
 
 *Medians over 780–800 instances per arm on four GPUs. Region medians do not add up to the whole-layer median. Profiling affects timings; these measurements explain the mechanisms rather than report serving performance.*
 
-<p style="font-size: 1.375rem; font-weight: 700; color: #111; margin-top: 1.5rem;">Low-Latency-Specific Optimizations</p>
+**Low-Latency-Specific Optimizations**
 
 **1. Launch the next kernel before its input exists.** Programmatic dependent launch (PDL) lets a kernel start while its predecessor is still running. It can prepare barriers, set up tensor memory and load weights before waiting for the input it needs. SGLang already uses PDL. The plugin moves dependency releases earlier so more of this preparation overlaps with ongoing computation. For example, the MoE reduction releases the next layer’s first projection as soon as it starts polling for peer results.
 
