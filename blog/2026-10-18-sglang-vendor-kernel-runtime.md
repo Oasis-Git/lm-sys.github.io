@@ -6,6 +6,16 @@ previewImg: /images/blog/sglang-vendor-kernel-runtime/runtime.svg
 type: blog
 ---
 
+<style>
+.article:has(#kernels-for-low-latency-inference) h2 { font-size: 30px; font-weight: 700; margin-top: 3rem; padding-top: 0; margin-bottom: 1rem; }
+.article:has(#kernels-for-low-latency-inference) h3 { font-size: 24px; font-weight: 700; margin-top: 2rem; padding-top: 0; margin-bottom: 1rem; }
+.article:has(#kernels-for-low-latency-inference) h4 { font-size: 21px; font-weight: 700; margin-top: 1.75rem; padding-top: 0; margin-bottom: 0.5rem; }
+.article:has(#kernels-for-low-latency-inference) h3::after,
+.article:has(#kernels-for-low-latency-inference) h4::after { display: none; }
+.article:has(#kernels-for-low-latency-inference) h3 .anchor svg,
+.article:has(#kernels-for-low-latency-inference) h4 .anchor svg { display: none; }
+</style>
+
 Low-latency inference offers many opportunities for optimizations tailored to specific models, hardware and workloads. These optimizations often require extensive kernel fusion and duplicate code across implementations, making them difficult to maintain. To support this specialization, we introduce **SGLang Low-Latency Mode**. It brings specialized kernels into SGLang through a plugin framework and delivers substantial latency reductions on both AMD and NVIDIA GPUs.
 
 ![AgentX performance on AMD MI355X at 1, 4 and 8 concurrent sessions; NVIDIA testing.](/images/blog/sglang-vendor-kernel-runtime/figure-1.svg)
@@ -41,11 +51,17 @@ At low concurrency, each decoder layer runs dozens of small kernels and two tens
 
 *One DeepSeek-V4.1 layer at batch size 1 on SGLang's standard path and with the AMD plugin. Numbered markers pair each cost of the standard path with the change that removes it. The timeline is schematic; it does not represent measured durations.*
 
-**Two persistent launches per layer.** Persistent FlyDSL kernels combine most of each layer into two launches. **K1** handles the mHC update, query and KV projections and KV-cache writes. **K2** handles attention, output projections, the remaining mHC update, MoE and both all-reduces. Index layers add compression, **K2i** scoring and top-k between them. The launch boundary makes K1’s KV writes visible across the GPU before K2 reads them.
+#### Two persistent launches per layer
 
-**Overlapping stages inside a launch.** Each value a stage produces is stored together with a tag for the current decode step, so the next stage, on the same GPU or another one, starts on a value as soon as its tag matches. No separate flag or reset between steps is needed. Weights that do not depend on routing load before their inputs arrive: K1's projection weights before the norm finishes, and in K2 the mHC mix weights and the shared expert's weights before the data they multiply. Routed-expert weights load once the router has chosen the experts.
+Persistent FlyDSL kernels combine most of each layer into two launches. **K1** handles the mHC update, query and KV projections and KV-cache writes. **K2** handles attention, output projections, the remaining mHC update, MoE and both all-reduces. Index layers add compression, **K2i** scoring and top-k between them. The launch boundary makes K1’s KV writes visible across the GPU before K2 reads them.
 
-**Bringing the all-reduce into the kernel.** As each output-projection tile is computed, K2 pushes it to every GPU's memory, and each GPU sums the pieces in rank order while other workgroups are still producing tiles ([push and reduce stages](https://github.com/sgl-project/sgl-amd-mono/blob/e952b221aafc05ef5adb84d2caf942f7283c1f0b/sgl_amd_mono/deepseek_v41/gfx950/stages/seam.py)). The MoE output is reduced the same way. Every cross-GPU wait has a deadline below SGLang's watchdog timeout; a missed deadline stops the launch on every GPU instead of hanging the server.
+#### Overlapping stages inside a launch
+
+Each value a stage produces is stored together with a tag for the current decode step, so the next stage, on the same GPU or another one, starts on a value as soon as its tag matches. No separate flag or reset between steps is needed. Weights that do not depend on routing load before their inputs arrive: K1's projection weights before the norm finishes, and in K2 the mHC mix weights and the shared expert's weights before the data they multiply. Routed-expert weights load once the router has chosen the experts.
+
+#### Bringing the all-reduce into the kernel
+
+As each output-projection tile is computed, K2 pushes it to every GPU's memory, and each GPU sums the pieces in rank order while other workgroups are still producing tiles ([push and reduce stages](https://github.com/sgl-project/sgl-amd-mono/blob/e952b221aafc05ef5adb84d2caf942f7283c1f0b/sgl_amd_mono/deepseek_v41/gfx950/stages/seam.py)). The MoE output is reduced the same way. Every cross-GPU wait has a deadline below SGLang's watchdog timeout; a missed deadline stops the launch on every GPU instead of hanging the server.
 
 The AMD implementation is compatible with decode graphs and integrates directly with SGLang’s graph runner. Kernels are compiled and buffers are prepared during initialization. SGLang then captures the specialized execution path for each supported shape and replays it through the existing serving flow.
 
@@ -53,7 +69,9 @@ The AMD implementation is compatible with decode graphs and integrates directly 
 
 On NVIDIA GPUs, we reduce latency by overlapping dependent kernels and communication while specializing attention, MoE and draft sampling for small batches. These kernels live in [sgl-nvidia-mega](https://github.com/sgl-project/sgl-nvidia-mega) which accelerates both target verification and draft execution for DeepSeek-V4.1-Flash with DSpark on NVIDIA GB300 GPUs.
 
-**Where the Time Goes.** At one request, DSpark verifies six token rows per step, leaving little work for each kernel while dependencies and cross-GPU communication add latency. In warmed CUDA-graph profiles, the plugin reduces the verify graph from 1,205 kernels to 1,189 but cuts the median decoder-layer latency from 96.8 µs to 68.4 µs. The gains come largely from reducing waits and overlapping work, with the largest reduction in the attention region. The table breaks down these changes before we walk through the main optimizations.
+#### Where the Time Goes
+
+At one request, DSpark verifies six token rows per step, leaving little work for each kernel while dependencies and cross-GPU communication add latency. In warmed CUDA-graph profiles, the plugin reduces the verify graph from 1,205 kernels to 1,189 but cuts the median decoder-layer latency from 96.8 µs to 68.4 µs. The gains come largely from reducing waits and overlapping work, with the largest reduction in the attention region. The table breaks down these changes before we walk through the main optimizations.
 
 | Region of one decoder layer, one request (median) | SGLang | With plugin |
 | --- | ---: | ---: |
@@ -64,7 +82,7 @@ On NVIDIA GPUs, we reduce latency by overlapping dependent kernels and communica
 
 *Medians over 780–800 instances per arm on four GPUs. Region medians do not add up to the whole-layer median. Profiling affects timings; these measurements explain the mechanisms rather than report serving performance.*
 
-**Low-Latency-Specific Optimizations**
+#### Low-Latency-Specific Optimizations
 
 **1. Launch the next kernel before its input exists.** Programmatic dependent launch (PDL) lets a kernel start while its predecessor is still running. It can prepare barriers, set up tensor memory and load weights before waiting for the input it needs. SGLang already uses PDL. The plugin moves dependency releases earlier so more of this preparation overlaps with ongoing computation. For example, the MoE reduction releases the next layer’s first projection as soon as it starts polling for peer results.
 
@@ -88,7 +106,9 @@ The expert GEMM also skips an all-zero tile introduced by padding the weight lay
 
 **4. Keep sequential draft sampling in one kernel.** DSpark’s Markov head proposes tokens sequentially. The plugin combines all five proposals into one kernel launch per GPU and keeps head weights in registers while coordinating token selection across GPUs. This reduces the profiled proposal span from 85.1 µs to 34.2 µs without changing SGLang’s speculative worker or acceptance logic.
 
-**Serving results.** On an 8K-input / 1K-output workload, the NVIDIA plugin improves per-user decode speed by 12–38% at 1–8 concurrent requests on four GB300 GPUs. Both runs use the same setup and simulated mean acceptance length of 3.51, changing only the plugin flag.
+#### Serving results
+
+On an 8K-input / 1K-output workload, the NVIDIA plugin improves per-user decode speed by 12–38% at 1–8 concurrent requests on four GB300 GPUs. Both runs use the same setup and simulated mean acceptance length of 3.51, changing only the plugin flag.
 
 ![Per-user decode speed versus aggregate output throughput per GPU for DeepSeek-V4.1-Flash on four GB300 GPUs, with and without the NVIDIA plugin](/images/blog/sglang-vendor-kernel-runtime/nvidia-low-concurrency.svg)
 
@@ -115,14 +135,14 @@ This design lets kernel teams ship focused optimizations without adding every sp
 
 ## Future Plans
 
-<p style="font-size: 1.375rem; font-weight: 700; color: #111; margin-top: 1.5rem;">Broader Model Support</p>
+### Broader Model Support
 
 Megakernel development is underway for GLM-5.3, K3, MiniMax M3 and other models on both AMD and NVIDIA GPUs. We plan to integrate these implementations into the plugin framework as they become ready. These low-latency kernels show promising potential for further performance improvements.
 
-<p style="font-size: 1.375rem; font-weight: 700; color: #111; margin-top: 1.5rem;">CI and Performance Validation</p>
+### CI and Performance Validation
 
 External kernel implementations sit outside SGLang's regular code review process. Strong CI coverage at the plugin interface is therefore essential to verify that these implementations meet SGLang's correctness and runtime requirements. We plan to test compatibility checks, weight binding, forward outputs and state updates, including KV-cache writes. End-to-end tests will also cover graph execution, fallback behavior and performance regressions as SGLang and the external libraries evolve.
 
-<p style="font-size: 1.375rem; font-weight: 700; color: #111; margin-top: 1.5rem;">Evolving Shared Plugin Interfaces</p>
+### Evolving Shared Plugin Interfaces
 
 Although the plugin framework is now in place, it is still at an early stage. We expect to refine its interfaces and design through long-term iteration as we integrate more kernels and learn from their use in production.
